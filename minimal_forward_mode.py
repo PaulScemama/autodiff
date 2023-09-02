@@ -1,83 +1,54 @@
 """
-A minimal example of forward mode auto-diff with dual numbers.
+A minimal example of forward mode auto-diff with dual numbers. 
+
+Only able to compute functions with addition and multiplication.
+
+Only able to compute functions with 1 or 2 input variables and 1 output variable.
 """
 
 class DFloat:
-    def __init__(self, init_val, init_dval):
-        self.val = init_val
-        self.dval = init_dval
-
+    def __init__(self, v, dv):
+        self.v = v
+        self.dv = dv
     def __repr__(self):
-        return f"[{self.val}, {self.dval}]"
-
-def without_mutating_values(init_val, init_dval):
-    # // With DFloat
-    def add(x: DFloat, y: DFloat):
-        out_val = x.val + y.val
-        out_dval = x.dval + y.dval
-        return DFloat(out_val, out_dval)
-
-    def mult(x: DFloat, y: DFloat):
-        out_val = x.val * y.val
-        out_dval = x.dval * y.val + x.val * y.dval
-        return DFloat(out_val, out_dval)
-
-
-    # // With lists
-    def add_(x: list, y: list):
-        out_val = x[0] + y[0]
-        out_dval = x[1] + y[1]
-        return [out_val, out_dval]
-
-    def mult_(x: list, y: list):
-        out_val = x[0] * y[0]
-        out_dval = x[1] * y[0] + x[0] * y[1]
-        return [out_val, out_dval]
-
-
-    # The starting dval is like v in f'(x)v
-    x = DFloat(init_val, init_dval)
-    # f(x) = x * (x + x ** 2)
-    print(f"With classes: {mult(x, add(x, mult(x, x)))}")
-
-    # f(x) = x * (x + x ** 2)
-    x_ = [init_val, init_dval]
-    print(f"With lists: {mult_(x_, add_(x_, mult_(x_, x_)))}")
-
-
-def with_mutating_values(init_val, init_dval):
-    # // With DFloat
-    def add(x: DFloat, y: DFloat):
-        x.val = x.val + y.val
-        x.dval = x.dval + y.dval
-        return x
+        return f"[{self.v}, {self.dv}]"
     
-    def mult(x: DFloat, y: DFloat):
-        x.val = x.val * y.val
-        x.dval = x.dval * y.val + x.val * y.dval
-        return x
-    
-    # // With lists
-    def add_(x: list, y: list):
-        x[0] = x[0] + y[0]
-        x[1] = x[1] + y[1]
-        return x
-    
-    def mult_(x: list, y: list):
-        x[0] = x[0] * y[0]
-        x[1] = x[1] * y[0] + x[0] * y[1]
-        return x
+def add(x1: DFloat, x2: DFloat):
+        v = x1.v + x2.v
+        dv = x1.dv + x2.dv
+        return DFloat(v, dv)
 
-    # The starting dval is like v in f'(x)v
-    x = DFloat(init_val, init_dval)
-    # f(x) = x * (x + x ** 2)
-    print(f"With classes: {mult(x, add(x, mult(x, x)))}")
-
-    # f(x) = x * (x + x ** 2)
-    x_ = [init_val, init_dval]
-    print(f"With lists: {mult_(x_, add_(x_, mult_(x_, x_)))}")
+def mult(x1: DFloat, x2: DFloat):
+    v = x1.v * x2.v
+    dv = x1.dv * x2.v + x1.v * x2.dv
+    return DFloat(v, dv)
 
 
 
-without_mutating_values(2.0, 1.0)
-without_mutating_values(2.0, 1.0)
+# f(x1, x2) = x1 * x2 + x1
+print("\n f(x1, x2) = x1 * x2 + x1")
+# Get df/dx1 evaluated at (1, 2)
+x1_ = DFloat(1, 1) # set primal to 1; tangent to 1
+x2_ = DFloat(2, 0) # set primal to 2; tangent to 0
+
+# Evaluate f with x1_ and x2_
+print(f"\n ----- Evaluate f(1, 2) and simultaneously compute df/dx1 ------")
+i_11 = mult(x1_, x2_)
+print(f"i_11: {i_11}")
+o = add(i_11, x1_)
+print(f"o: {o}")
+
+# // --------------------------------------------------
+
+# Get df/dx2 evaluated at (1, 2)
+x1_ = DFloat(1, 0) # set tangent to 0
+x2_ = DFloat(2, 1) # set tangent to 1
+
+# Evaluate f with x1_ and x2_
+print(f"\n ------ Evaluate f(1, 2) and simultaneously compute df/dx2 ------ ")
+i_21 = mult(x1_, x2_)
+print(f"i_21: {i_21}")
+o = add(i_21, x1_)
+print(f"o: {o}")
+
+
