@@ -19,11 +19,11 @@ Backward pass procedure: for each node in toposort (dfs) order
 
 class Node(NamedTuple):
     val: float
-    parents: tuple[Node, Node] = ()
+    parents: tuple[Node, ...] = ()
     grad_fn: callable = None
 
 
-def add(
+def _add(
     x: Node,
     y: Node,
 ) -> Node:
@@ -31,7 +31,7 @@ def add(
     return new_node
 
 
-def subtract(
+def _sub(
     x: Node,
     y: Node,
 ) -> Node:
@@ -39,7 +39,7 @@ def subtract(
     return new_node
 
 
-def mult(
+def _mult(
     x: Node,
     y: Node,
 ) -> Node:
@@ -47,6 +47,27 @@ def mult(
         val=x.val * y.val, parents=(x, y), grad_fn=lambda g: (g * y.val, g * x.val)
     )
     return new_node
+
+
+def sum(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _add(args[0], sum(*args[1:]))
+
+
+def mult(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _mult(args[0], mult(*args[1:]))
+
+
+def sub(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _sub(args[0], sub(*args[1:]))
 
 
 def toposort(node: Node):
@@ -67,7 +88,7 @@ def toposort(node: Node):
 
 
 def grad(f: callable, at: tuple[float, ...]):
-    input_ids = set()
+    input_ids = {}
 
     out = f(*at)  # forward pass
 
@@ -77,8 +98,8 @@ def grad(f: callable, at: tuple[float, ...]):
 
     def accumulate_grad_to_parents(node: Node) -> None:
 
-        parents = node.parents
         g = grads[id(node)]
+        parents = node.parents
         parents_grads = node.grad_fn(g)
 
         for parent, parent_grad in zip(parents, parents_grads):
@@ -89,14 +110,15 @@ def grad(f: callable, at: tuple[float, ...]):
 
     for node in toposort(out):
 
-        # if we have an input node it doesn't have parents
+        # if we have an input node that doesn't have parents
+        # it means its an input node
         if not node.parents:
-            input_ids.add(id(node))
+            input_ids[id(node)] = None
 
         else:
             accumulate_grad_to_parents(node)
 
-    return tuple(grads[k] for k in input_ids)[::-1]
+    return tuple(grads[k] for k in input_ids.keys())[::-1]
 
 
 if __name__ == "__main__":
@@ -105,10 +127,12 @@ if __name__ == "__main__":
     def f_jax(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         return x * y + x * x + z * z
+
     grads_jax = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     def f(x, y, z):
-        return add(add(mult(x, y), mult(x, x)), mult(z, z))
+        return _add(_add(mult(x, y), mult(x, x)), mult(z, z))
+
     grads = grad(f, at=(Node(1.0), Node(2.0), Node(3.0)))
 
     print(grads)
