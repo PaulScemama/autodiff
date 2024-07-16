@@ -36,26 +36,32 @@ def _add(
     x: Node,
     y: Node,
 ) -> Node:
-    new_node = Node(val=x.val + y.val, parents=(x, y), grad_fn=lambda g: (g, g))
-    return new_node
+    out = Node(val=x.val + y.val, parents=(x, y), grad_fn=lambda g: (g, g))
+    return out
 
 
 def _sub(
     x: Node,
     y: Node,
 ) -> Node:
-    new_node = (Node(val=x.val - y.val, parents=(x, y), grad_fn=lambda g: (g, -g)),)
-    return new_node
+    out = Node(val=x.val - y.val, parents=(x, y), grad_fn=lambda g: (g, -g))
+    return out
 
 
 def _mult(
     x: Node,
     y: Node,
 ) -> Node:
-    new_node = Node(
+    out = Node(
         val=x.val * y.val, parents=(x, y), grad_fn=lambda g: (g * y.val, g * x.val)
     )
-    return new_node
+    return out
+
+def _div(
+    x: Node,
+    y: Node,
+) -> Node:
+    out = Node(val=x.val/y.val, parents=(x,y), grad_fn=lambda g: (1.0 / y.val, - (g * x.val) / (y.val ** 2)))
 
 
 def sum(*args):
