@@ -23,7 +23,7 @@ class Node(NamedTuple):
     grad_fn: callable = None
 
 
-def _add(
+def add(
     x: Node,
     y: Node,
 ) -> Node:
@@ -31,7 +31,7 @@ def _add(
     return new_node
 
 
-def _sub(
+def sub(
     x: Node,
     y: Node,
 ) -> Node:
@@ -39,7 +39,7 @@ def _sub(
     return new_node
 
 
-def _mult(
+def mult(
     x: Node,
     y: Node,
 ) -> Node:
@@ -48,26 +48,6 @@ def _mult(
     )
     return new_node
 
-
-def sum(*args):
-    if len(args) == 1:
-        return args[0]
-    else:
-        return _add(args[0], sum(*args[1:]))
-
-
-def mult(*args):
-    if len(args) == 1:
-        return args[0]
-    else:
-        return _mult(args[0], mult(*args[1:]))
-
-
-def sub(*args):
-    if len(args) == 1:
-        return args[0]
-    else:
-        return _sub(args[0], sub(*args[1:]))
 
 
 def toposort(node: Node):
@@ -131,7 +111,7 @@ if __name__ == "__main__":
     grads_jax = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     def f(x, y, z):
-        return _add(_add(mult(x, y), mult(x, x)), mult(z, z))
+        return add(add(mult(x, y), mult(x, x)), mult(z, z))
 
     grads = grad(f, at=(Node(1.0), Node(2.0), Node(3.0)))
 

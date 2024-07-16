@@ -172,7 +172,7 @@ def test():
 
     x, y, z = Node(1.0), Node(2.0), Node(3.0)
 
-    def jax_f(inputs):
+    def f_jax(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
         b = x * x
@@ -188,7 +188,7 @@ def test():
         return recursive_add(a, b, c, d)
 
     our_grad = grad(f)(x, y, z)
-    jax_grad = jax.grad(jax_f)({"x": 1.0, "y": 2.0, "z": 3.0})
+    jax_grad = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     print(f"Our grad: {our_grad}")
     print(f"Jax grad: {jax_grad}")
