@@ -22,9 +22,17 @@ class Node(NamedTuple):
     parents: tuple[Node, ...] = ()
     grad_fn: callable = None
 
+    def __add__(self: Node, other: Node) -> Node:
+        return _add(self, other)
+
+    def __sub__(self: Node, other: Node) -> Node:
+        return _sub(self, other)
+
+    def __mul__(self: Node, other: Node) -> Node:
+        return _mult(self, other)
 
 
-def add(
+def _add(
     x: Node,
     y: Node,
 ) -> Node:
@@ -32,7 +40,7 @@ def add(
     return new_node
 
 
-def sub(
+def _sub(
     x: Node,
     y: Node,
 ) -> Node:
@@ -40,7 +48,7 @@ def sub(
     return new_node
 
 
-def mult(
+def _mult(
     x: Node,
     y: Node,
 ) -> Node:
@@ -48,6 +56,27 @@ def mult(
         val=x.val * y.val, parents=(x, y), grad_fn=lambda g: (g * y.val, g * x.val)
     )
     return new_node
+
+
+def sum(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _add(args[0], sum(*args[1:]))
+
+
+def mult(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _mult(args[0], mult(*args[1:]))
+
+
+def sub(*args):
+    if len(args) == 1:
+        return args[0]
+    else:
+        return _sub(args[0], sub(*args[1:]))
 
 
 def toposort(node: Node):
@@ -111,7 +140,7 @@ if __name__ == "__main__":
     grads_jax = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     def f(x, y, z):
-        return add(add(mult(x, y), mult(x, x)), mult(z, z))
+        return _add(_add(mult(x, y), mult(x, x)), mult(z, z))
 
     grads = grad(f, at=(Node(1.0), Node(2.0), Node(3.0)))
 
