@@ -2,62 +2,49 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-
 """
-Forward pass procedure: for each operation
-- create new node to hold...
-    - output float of operation
-    - parents that were inputs in creating the operation
-    - vjp function that takes in a value 'g' and return the derivative of 
-    the operation wrt to each parent times that value 'g'.
+Forward pass procedure: for each operation create new node that holds...
+    - its value
+    - parents that were inputs to the operation that created the new node
+    - grad function that takes in a value 'g' and return the derivative of 
+      the operation wrt to each parent times that value 'g'.
 
-
-Backward pass procedure: for each output node (NOTE: simplified with only one output node)
-- create a dictionary mapping a unique id for each node in the computation graph
-- the output node should start with an grad value of 1 in that dictionary
-- get a topological sorting of computation graph
-- loop through nodes in sorting and accumulate gradients by...
-    - get parents of node, compute parent grads using the vjp of the node
-    - add parent grads to correct value of id in parent grads dict
-- return leaf nodes in gradient accumulation (those without parents)
+NOTE: simplified with only one output node
+Backward pass procedure: for each node in toposort (dfs) order
+    - if it has parents, calculate the contribution of the node to
+      the grad of its parents using its grad_fn and accumulate the
+      result to the parents values in the grads dict.
 """
 
 
 class Node(NamedTuple):
     val: float
     parents: tuple[Node, Node] = ()
-    vjp: callable = None
-    name: str = None
+    grad_fn: callable = None
 
 
-def add(x: Node, y: Node, out_name: str = None) -> Node:
-    new_node = Node(
-        val=x.val + y.val,
-        parents=(x, y),
-        vjp=lambda g: (g, g),
-        name=out_name,
-    )
+def add(
+    x: Node,
+    y: Node,
+) -> Node:
+    new_node = Node(val=x.val + y.val, parents=(x, y), grad_fn=lambda g: (g, g))
     return new_node
 
 
-def subtract(x: Node, y: Node, out_name: str = None) -> Node:
-    new_node = (
-        Node(
-            val=x.val - y.val,
-            parents=(x, y),
-            vjp=lambda g: (g, -g),
-            name=out_name,
-        ),
-    )
+def subtract(
+    x: Node,
+    y: Node,
+) -> Node:
+    new_node = (Node(val=x.val - y.val, parents=(x, y), grad_fn=lambda g: (g, -g)),)
     return new_node
 
 
-def mult(x: Node, y: Node, out_name: str = None) -> Node:
+def mult(
+    x: Node,
+    y: Node,
+) -> Node:
     new_node = Node(
-        val=x.val * y.val,
-        parents=(x, y),
-        vjp=lambda g: (g * y.val, g * x.val),
-        name=out_name,
+        val=x.val * y.val, parents=(x, y), grad_fn=lambda g: (g * y.val, g * x.val)
     )
     return new_node
 
@@ -76,60 +63,53 @@ def toposort(node: Node):
             nodes.append(n)
 
     dfs(node)
-    return nodes[::-1]
+    return reversed(nodes)
+
+
+def grad(f: callable, at: tuple[float, ...]):
+    input_ids = set()
+
+    out = f(*at)  # forward pass
+
+    # to hold grad values of processed nodes
+    grads = dict()
+    grads[id(out)] = 1.0
+
+    def accumulate_grad_to_parents(node: Node) -> None:
+
+        parents = node.parents
+        g = grads[id(node)]
+        parents_grads = node.grad_fn(g)
+
+        for parent, parent_grad in zip(parents, parents_grads):
+            if id(parent) in grads:
+                grads[id(parent)] += parent_grad
+            else:
+                grads[id(parent)] = parent_grad
+
+    for node in toposort(out):
+
+        # if we have an input node it doesn't have parents
+        if not node.parents:
+            input_ids.add(id(node))
+
+        else:
+            accumulate_grad_to_parents(node)
+
+    return tuple(grads[k] for k in input_ids)[::-1]
 
 
 if __name__ == "__main__":
+    import jax
 
-    def f(x, y):
-        z1 = mult(x, y, out_name="z1")
-        z2 = mult(x, x, out_name="z2")
-        o = add(z1, z2, out_name="o")
-        return o
+    def f_jax(inputs):
+        x, y, z = inputs["x"], inputs["y"], inputs["z"]
+        return x * y + x * x + z * z
+    grads_jax = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
-    def grad(f, at):
+    def f(x, y, z):
+        return add(add(mult(x, y), mult(x, x)), mult(z, z))
+    grads = grad(f, at=(Node(1.0), Node(2.0), Node(3.0)))
 
-        out = f(*at)  # forward pass
-        print(out.val)
-
-        sorted_nodes = toposort(out)
-        grads = {n.name: None for n in sorted_nodes}
-        grads["o"] = 1.0
-
-        print(f"Initial grads: {grads}")
-
-        for node in sorted_nodes:
-            print(f"processing {node.name}")
-
-            if not node.parents:
-                continue
-
-            parents = node.parents
-            print(f"node {node.name} parents: {[p.name for p in parents]}")
-
-
-            parents_grads = node.vjp(grads[node.name])
-            # print(f"node {node.name} contributions to parent grads: {parents_grads}")
-
-            for parent, parent_grad in zip(parents, parents_grads):
-                if grads[parent.name]:
-                    grads[parent.name] += parent_grad
-                else:
-                    grads[parent.name] = parent_grad
-
-            print(f"grads after processing {node.name}: {grads}")
-            # print(f"Node; {node}")
-            # print(f"grads: {grads}")
-
-        return grads
-
-    x = Node(1.0, name="x")
-    y = Node(2.0, name="y")
-
-    out = f(x, y)
-
-    nodes = toposort(out)
-
-    grads = grad(f, at=(x, y))
     print(grads)
-    # print(gradients)
+    print(grads_jax)
