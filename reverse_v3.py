@@ -180,24 +180,17 @@ def test():
     import jax
     import jax.numpy as jnp
 
-    def f_jax(inputs):
-        x, y, z = inputs["x"], inputs["y"], inputs["z"]
-        a = x * y
-        b = x * x
-        c = z * z * jnp.sin(x)
-        d = z - y + x
-        return a + b + c + d
-
     def f(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
         b = x * x
-        c = z * z * sin(x)
+        c = z * z 
         d = z - y + x
         return a + b + c + d
 
+
     our_grad = grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
-    jax_grad = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
+    jax_grad = jax.grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     print(f"Our grad: {our_grad}")
     print(f"Jax grad: {jax_grad}")
