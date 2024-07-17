@@ -1,4 +1,4 @@
-from reverse_v3 import add, sub, mul, div, pow
+from .reverse_mode.jax_like import add, sub, mul, div, pow
 
 ## --- Extra utility for recursive operators --- ##
 def build_recursive_operator(op: callable):
