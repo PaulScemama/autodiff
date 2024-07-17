@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import NamedTuple, Generator, Callable, Any
 import math
 
 
@@ -17,7 +17,7 @@ import math
 class Node(NamedTuple):
     val: float
     parents: tuple[Node, ...] = ()
-    grad_fn: callable = None
+    grad_fn: Callable = None
 
 
 ## --- Define operations on Nodes ---- ##
@@ -99,7 +99,7 @@ Node.__pow__ = pow
 
 
 ## --- Functions for grad --- ##
-def tree_map(f, tree):
+def tree_map(f: Callable, tree: Any) -> Any:
     # taken from https://gist.github.com/okarthikb/5f3b9c8eef68bdd338f7291b27ce3df1
     if isinstance(tree, (float, int, Node)):
         return f(tree)
@@ -111,7 +111,7 @@ def tree_map(f, tree):
         raise TypeError()
 
 
-def toposort(node: Node):
+def toposort(node: Node) -> Generator:
 
     visited = set()
     nodes = []
@@ -127,55 +127,43 @@ def toposort(node: Node):
     return reversed(nodes)
 
 
-def contribute_grad_to_parents(
-    node: Node, curr_grads: dict[int, Node]
-) -> dict[int, Node]:
-    """Given a node and a dictionary mapping node ids to their current grad accumulation,
-    contribute the grad of the current node to its parents.
-
-    Args:
-        node: The node which will contribute grad to its parents.
-        curr_grads: A dictionary mapping node ids to node's grad accumulations.
-
-    Returns:
-        dict[int, Node]: An updated dictionary mapping node ids to node's grads
-        where the update is the passed-in node's contribution to its parents grads.
-    """
-    g = curr_grads[id(node)]
-    for parent, parent_grad in zip(node.parents, node.grad_fn(g)):
-        if id(parent) in curr_grads:
-            curr_grads[id(parent)] += parent_grad
-        else:
-            curr_grads[id(parent)] = parent_grad
-
-    return curr_grads
-
-
-def value_and_grad(f: callable):
+def value_and_grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
     def _value_and_grad(*args):
 
-        in_args = tree_map(Node, args)
-        out = f(*in_args)  # forward pass
+        in_args: tuple[Node, ...] = tree_map(Node, args)
+        out: Node = f(*in_args)  # forward pass
 
         # to hold grad values of processed nodes
         grads = dict()
-        grads[id(out)] = 1.0
+        grads[out] = 1.0
 
-        for node in toposort(out):
+        toposorted: Generator = toposort(out)
+        for node in toposorted:
 
             # if we have an input node that does NOT have parents
             # it means its an input node
-            if node.parents:
-                contribute_grad_to_parents(node, grads)  # updates `grads` dictionary
+            if not node.parents:
+                continue
+
+            parents: tuple[Node, ...] = node.parents
+            parents_grads: tuple[float, ...] = node.grad_fn(grads[node])
+
+            for parent, parent_grad in zip(parents, parents_grads):
+                if parent in grads:
+                    grads[parent] += parent_grad
+                else:
+                    grads[parent] = parent_grad
 
         # gets output value and gets gradient for first input arg tree
-        return out.val, tree_map(lambda n: grads[id(n)], in_args[0])
+        out_val: float = out.val
+        in_grads: tuple[float, ...] = tree_map(lambda n: grads[n], in_args[0])
+        return out_val, in_grads
 
     return _value_and_grad
 
 
-def grad(f: callable):
+def grad(f: Callable) -> Callable[..., tuple[float, ...]]:
 
     def _grad(*args):
         _, grad = value_and_grad(f)(*args)
