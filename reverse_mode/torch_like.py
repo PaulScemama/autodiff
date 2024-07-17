@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from functools import wraps
+from typing import Generator, Callable
 import math
 
 """
@@ -17,14 +17,14 @@ import math
 class Node:
 
     def __init__(
-        self, val: float, children: tuple[Node, ...] = (), grad_fn: callable = None
-    ):
+        self, val: float, children: tuple[Node, ...] = (), grad_fn: Callable = None
+    ) -> None:
         self.val = val
         self.children = children
         self.grad_fn = grad_fn
         self.grad = None
 
-    def toposort(self):
+    def toposort(self) -> Generator:
         visited = set()
         nodes = []
 
@@ -38,14 +38,14 @@ class Node:
         dfs(self)
         return reversed(nodes)
 
-    def backward(self):
+    def backward(self) -> None:
         self.grad = 1.0
 
         for node in self.toposort():
 
             if node.children:
-                children = node.children
-                child_grads = node.grad_fn(node.grad)
+                children: tuple[Node, ...] = node.children
+                child_grads: tuple[float, ...] = node.grad_fn(node.grad)
 
                 for child, child_grad in zip(children, child_grads):
                     if child.grad:
