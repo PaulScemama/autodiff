@@ -4,6 +4,14 @@ from typing import NamedTuple
 import math
 
 
+"""
+    x       y   # parents
+     \     /
+      \   /
+       out      # node
+"""
+
+
 ## --- Node class --- ##
 # Holds each scalar in computation graph we will be building
 class Node(NamedTuple):
@@ -184,10 +192,9 @@ def test():
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
         b = x * x
-        c = z * z 
+        c = z * z
         d = z - y + x
         return a + b + c + d
-
 
     our_grad = grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
     jax_grad = jax.grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
@@ -196,7 +203,9 @@ def test():
     print(f"Jax grad: {jax_grad}")
 
     # check values match
-    assert jnp.allclose(jnp.array(list(our_grad.values())), jnp.array(list(jax_grad.values())))
+    assert jnp.allclose(
+        jnp.array(list(our_grad.values())), jnp.array(list(jax_grad.values()))
+    )
 
 
 if __name__ == "__main__":
