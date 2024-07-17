@@ -196,7 +196,7 @@ def test():
     print(f"Jax grad: {jax_grad}")
 
     # check values match
-    # assert jnp.allclose(jnp.array(our_grad), jnp.array(list(jax_grad.values())))
+    assert jnp.allclose(jnp.array(list(our_grad.values())), jnp.array(list(jax_grad.values())))
 
 
 if __name__ == "__main__":
