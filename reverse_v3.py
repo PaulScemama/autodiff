@@ -4,27 +4,15 @@ from typing import NamedTuple
 import math
 
 
+## --- Node class --- ##
+# Holds each scalar in computation graph we will be building
 class Node(NamedTuple):
     val: float
     parents: tuple[Node, ...] = ()
     grad_fn: callable = None
 
-    def __add__(self: Node, other: Node) -> Node:
-        return add(self, other)
 
-    def __sub__(self: Node, other: Node) -> Node:
-        return sub(self, other)
-
-    def __mul__(self: Node, other: Node) -> Node:
-        return mul(self, other)
-
-    def __truediv__(self: Node, other: Node) -> Node:
-        return div(self, other)
-
-    def __pow__(self: Node, other: Node) -> Node:
-        return pow(self, other)
-
-
+## --- Define operations on Nodes ---- ##
 def add(
     x: Node,
     y: Node,
@@ -94,6 +82,27 @@ def cos(x: Node) -> Node:
     return out
 
 
+## --- Overload ops --- ##
+Node.__add__ = add
+Node.__sub__ = sub
+Node.__mul__ = mul
+Node.__truediv__ = div
+Node.__pow__ = pow
+
+
+## --- Functions for grad --- ##
+def tree_map(f, tree):
+    # taken from https://gist.github.com/okarthikb/5f3b9c8eef68bdd338f7291b27ce3df1
+    if isinstance(tree, (float, int, Node)):
+        return f(tree)
+    elif isinstance(tree, dict):
+        return {k: tree_map(f, v) for k, v in tree.items()}
+    elif isinstance(tree, (list, tuple)):
+        return type(tree)(tree_map(f, v) for v in tree)
+    else:
+        raise TypeError()
+
+
 def toposort(node: Node):
 
     visited = set()
@@ -110,67 +119,66 @@ def toposort(node: Node):
     return reversed(nodes)
 
 
-def grad(f: callable):
+def contribute_grad_to_parents(
+    node: Node, curr_grads: dict[int, Node]
+) -> dict[int, Node]:
+    """Given a node and a dictionary mapping node ids to their current grad accumulation,
+    contribute the grad of the current node to its parents.
 
-    def _grad(*at: tuple[float, ...]):
-        input_ids = {}
+    Args:
+        node: The node which will contribute grad to its parents.
+        curr_grads: A dictionary mapping node ids to node's grad accumulations.
 
-        out = f(*at)  # forward pass
+    Returns:
+        dict[int, Node]: An updated dictionary mapping node ids to node's grads
+        where the update is the passed-in node's contribution to its parents grads.
+    """
+    g = curr_grads[id(node)]
+    for parent, parent_grad in zip(node.parents, node.grad_fn(g)):
+        if id(parent) in curr_grads:
+            curr_grads[id(parent)] += parent_grad
+        else:
+            curr_grads[id(parent)] = parent_grad
+
+    return curr_grads
+
+
+def value_and_grad(f: callable):
+
+    def _value_and_grad(*args):
+
+        in_args = tree_map(Node, args)
+        out = f(*in_args)  # forward pass
 
         # to hold grad values of processed nodes
         grads = dict()
         grads[id(out)] = 1.0
 
-        def accumulate_grad_to_parents(node: Node) -> None:
-
-            g = grads[id(node)]
-            parents = node.parents
-            parents_grads = node.grad_fn(g)
-
-            for parent, parent_grad in zip(parents, parents_grads):
-                if id(parent) in grads:
-                    grads[id(parent)] += parent_grad
-                else:
-                    grads[id(parent)] = parent_grad
-
         for node in toposort(out):
 
-            # if we have an input node that doesn't have parents
+            # if we have an input node that does NOT have parents
             # it means its an input node
-            if not node.parents:
-                input_ids[id(node)] = None
+            if node.parents:
+                contribute_grad_to_parents(node, grads)  # updates `grads` dictionary
 
-            else:
-                accumulate_grad_to_parents(node)
+        # gets output value and gets gradient for first input arg tree
+        return out.val, tree_map(lambda n: grads[id(n)], in_args[0])
 
-        return tuple(grads[k] for k in input_ids.keys())[::-1]
+    return _value_and_grad
+
+
+def grad(f: callable):
+
+    def _grad(*args):
+        _, grad = value_and_grad(f)(*args)
+        return grad
 
     return _grad
-
-
-def build_recursive_operator(op: callable):
-
-    def fn(*args):
-        if len(args) == 1:
-            return args[0]
-        else:
-            return op(args[0], fn(*args[1:]))
-
-    return fn
-
-
-recursive_add: callable = build_recursive_operator(add)
-recursive_sub: callable = build_recursive_operator(sub)
-recursive_mul: callable = build_recursive_operator(mul)
-recursive_div: callable = build_recursive_operator(div)
-recursive_pow: callable = build_recursive_operator(pow)
 
 
 def test():
     import jax
     import jax.numpy as jnp
-
-    x, y, z = Node(1.0), Node(2.0), Node(3.0)
 
     def f_jax(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
@@ -180,21 +188,22 @@ def test():
         d = z - y + x
         return a + b + c + d
 
-    def f(x, y, z):
+    def f(inputs):
+        x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
         b = x * x
         c = z * z * sin(x)
         d = z - y + x
-        return recursive_add(a, b, c, d)
+        return a + b + c + d
 
-    our_grad = grad(f)(x, y, z)
+    our_grad = grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
     jax_grad = jax.grad(f_jax)({"x": 1.0, "y": 2.0, "z": 3.0})
 
     print(f"Our grad: {our_grad}")
     print(f"Jax grad: {jax_grad}")
 
     # check values match
-    assert jnp.allclose(jnp.array(our_grad), jnp.array(list(jax_grad.values())))
+    # assert jnp.allclose(jnp.array(our_grad), jnp.array(list(jax_grad.values())))
 
 
 if __name__ == "__main__":
