@@ -127,9 +127,9 @@ def toposort(node: Node) -> Generator:
     return reversed(nodes)
 
 
-def value_and_grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
+def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
-    def _value_and_grad(*args):
+    def _grad(*args):
 
         in_args: tuple[Node, ...] = tree_map(Node, args)
         out: Node = f(*in_args)  # forward pass
@@ -155,19 +155,8 @@ def value_and_grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]
                 else:
                     grads[parent] = parent_grad
 
-        # gets output value and gets gradient for first input arg tree
-        out_val: float = out.val
-        in_grads: tuple[float, ...] = tree_map(lambda n: grads[n], in_args[0])
-        return out_val, in_grads
-
-    return _value_and_grad
-
-
-def grad(f: Callable) -> Callable[..., tuple[float, ...]]:
-
-    def _grad(*args):
-        _, grad = value_and_grad(f)(*args)
-        return grad
+        # gets gradient for first input arg tree
+        return tree_map(lambda n: grads[n], in_args[0])
 
     return _grad
 
