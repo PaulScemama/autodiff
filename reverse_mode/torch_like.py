@@ -159,8 +159,8 @@ def test():
     our_grad = {k: v.grad for k, v in our_inputs.items()}
     torch_grad = {k: v.grad for k, v in torch_inputs.items()}
 
-    print(our_grad)
-    print(torch_grad)
+    print(f"Our grad: {our_grad}")
+    print(f"Torch grad: {torch_grad}")
 
     # check values match
     assert torch.allclose(
