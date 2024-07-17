@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from typing import NamedTuple
+from functools import wraps
 import math
 
 """
