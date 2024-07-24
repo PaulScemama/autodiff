@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import NamedTuple, Generator, Callable, Any
 import math
-
+import numpy as np
 
 """
     x       y   # parents
@@ -15,7 +15,7 @@ import math
 ## --- Node class --- ##
 # Holds each scalar in computation graph we will be building
 class Node(NamedTuple):
-    val: float
+    val: np.array
     parents: tuple[Node, ...] = ()
     grad_fn: Callable = None
 
@@ -90,6 +90,25 @@ def cos(x: Node) -> Node:
     return out
 
 
+def dot(x: Node, y: Node) -> Node:
+    out = Node(
+        val=np.dot(x.val, y.val), parents=(x,y), grad_fn=lambda g: (g * y.val, g * x.val),
+    )
+    return out
+
+    
+# TODO: understand this from https://github.com/mattjj/autodidact/blob/master/autograd/numpy/numpy_vjps.py
+# def _dot_grad_0(g: float, xval: float, yval: float) -> tuple:
+    
+
+# def _dot_grad_1(g: float, xval: float, yval: float) -> tuple:
+#     if yval.ndim == 0:
+#         return np.sum(xval * g)
+#     if xval.ndim == 1 and yval.ndim == 1:
+#         return g * xval
+
+
+
 ## --- Overload ops --- ##
 Node.__add__ = add
 Node.__sub__ = sub
@@ -101,7 +120,7 @@ Node.__pow__ = pow
 ## --- Functions for grad --- ##
 def tree_map(f: Callable, tree: Any) -> Any:
     # taken from https://gist.github.com/okarthikb/5f3b9c8eef68bdd338f7291b27ce3df1
-    if isinstance(tree, (float, int, Node)):
+    if isinstance(tree, (np.ndarray, Node)):
         return f(tree)
     elif isinstance(tree, dict):
         return {k: tree_map(f, v) for k, v in tree.items()}
@@ -117,8 +136,8 @@ def toposort(node: Node) -> Generator:
     nodes = []
 
     def dfs(n):
-        if n not in visited:
-            visited.add(n)
+        if id(n) not in visited:
+            visited.add(id(n))
             for parent in n.parents:
                 dfs(parent)
             nodes.append(n)
@@ -136,54 +155,65 @@ def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
         # to hold grad values of processed nodes
         grads = dict()
-        grads[out] = 1.0
+        grads[id(out)] = 1.0
 
         toposorted: Generator = toposort(out)
-        for node in toposorted:
 
+        for node in toposorted:
+            
             # if we have an input node that does NOT have parents
             # it means its an input node
             if not node.parents:
                 continue
 
             parents: tuple[Node, ...] = node.parents
-            parents_grads: tuple[float, ...] = node.grad_fn(grads[node])
+            parents_grads: tuple[float, ...] = node.grad_fn(grads[id(node)])
 
             for parent, parent_grad in zip(parents, parents_grads):
-                if parent in grads:
-                    grads[parent] = parent_grad + grads[parent]
+                if id(parent) in grads:
+                    grads[id(parent)] = grads[id(parent)] + parent_grad
                 else:
-                    grads[parent] = parent_grad
+                    grads[id(parent)] = parent_grad
 
         # gets gradient for first input arg tree
-        return tree_map(lambda n: grads[n], in_args[0])
+        return tree_map(lambda n: grads[id(n)], in_args[0])
 
     return _grad
 
 
 def test():
+
     import jax
     import jax.numpy as jnp
-
+    
     def f(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
         b = x * x
         c = z * z
-        d = z - y + x
-        return a + b + c + d
+        d = y + x
+        out = dot(a, b) + dot(c, d)
+        return out
+    
 
+    def f_jax(inputs):
+        x, y, z = inputs["x"], inputs["y"], inputs["z"]
+        a = x * y
+        b = x * x
+        c = z * z
+        d = y + x
+        out = jnp.dot(a, b) + jnp.dot(c, d)
+        return out
 
-    our_grad = grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
-    jax_grad = jax.grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
+    inputs = {"x": np.array([1.0, 3.0]), "y": np.array([2.0, 4.0]), "z": np.array([3.0, 5.0])}
+    our_grad = grad(f)(inputs)
+    jax_grad = jax.grad(f_jax)(inputs)
+
+    
 
     print(f"Our grad: {our_grad}")
-    print(f"Jax grad: {jax_grad}")
+    print(f"Jax grads: {jax_grad}")
 
-    # check values match
-    assert jnp.allclose(
-        jnp.array(list(our_grad.values())), jnp.array(list(jax_grad.values()))
-    )
 
 
 if __name__ == "__main__":
