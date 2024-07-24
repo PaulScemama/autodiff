@@ -2,6 +2,7 @@ from typing import Callable, Tuple
 
 # // Dual number representation -----------------------------------------------
 
+
 class Variable:
     def __init__(self, v: float, dv: float = 0):
         self.v = v
@@ -36,11 +37,8 @@ class Variable:
             return var
 
 
-
-
 # // Function for getting derivative with forward-mode autodiff ---------------
 def value_and_grad(f: Callable, at: Tuple):
-
     # Create Variables, i.e. dual numbers
     n_vars = len(at)
     vars = [Variable(v) for v in at]
@@ -48,12 +46,11 @@ def value_and_grad(f: Callable, at: Tuple):
     value: float
     grad = list()
     for i in range(n_vars):
-
         # set tangent to 1 to get grad wrt to it
         vars[i].dv = 1
 
         # call function
-        out_i = f(*vars) 
+        out_i = f(*vars)
 
         # reset tangent to 0 for next loop
         vars[i].dv = 0

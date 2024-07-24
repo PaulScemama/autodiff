@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import NamedTuple, Generator, Callable, Any
 import math
-
+from typing import Any, Callable, Generator, NamedTuple
 
 """
     x       y   # parents
@@ -112,7 +111,6 @@ def tree_map(f: Callable, tree: Any) -> Any:
 
 
 def toposort(node: Node) -> Generator:
-
     visited = set()
     nodes = []
 
@@ -128,9 +126,7 @@ def toposort(node: Node) -> Generator:
 
 
 def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
-
     def _grad(*args):
-
         in_args: tuple[Node, ...] = tree_map(Node, args)
         out: Node = f(*in_args)  # forward pass
 
@@ -140,7 +136,6 @@ def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
         toposorted: Generator = toposort(out)
         for node in toposorted:
-
             # if we have an input node that does NOT have parents
             # it means its an input node
             if not node.parents:
@@ -172,7 +167,6 @@ def test():
         c = z * z
         d = z - y + x
         return a + b + c + d
-
 
     our_grad = grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})
     jax_grad = jax.grad(f)({"x": 1.0, "y": 2.0, "z": 3.0})

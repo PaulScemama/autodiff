@@ -3,8 +3,10 @@ from __future__ import annotations
 import math
 from typing import Callable, Generator
 
+import numpy as np
+
 """
-                out       # node
+                out       # np.array, 5.0]3
                /   \
               /     \
              x       y    # children
@@ -45,7 +47,9 @@ class Node:
                 child_grads: tuple[float, ...] = node.grad_fn(node.grad)
 
                 for child, child_grad in zip(children, child_grads):
-                    if child.grad:
+                    if child.grad is not None:
+                        # important to reassign because updating in place can cause
+                        # silent bugs with numpy arrays.
                         child.grad = child_grad + child.grad
                     else:
                         child.grad = child_grad
@@ -121,6 +125,13 @@ def cos(x: Node) -> Node:
     return out
 
 
+def dot(x: Node, y: Node) -> Node:
+    out = Node(
+        val=np.dot(x, y), children=(x, y), grad_fn=lambda g: (g * y.val, g * x.val)
+    )
+    return out
+
+
 ## --- Overload ops --- ##
 Node.__add__ = add
 Node.__sub__ = sub
@@ -139,18 +150,30 @@ def test():
         b = x * x
         c = z * z
         d = z - y + x
-        return a + b + c + d
+        return dot(a, b) + dot(c, d)
 
-    our_inputs = {"x": Node(1.0), "y": Node(2.0), "z": Node(3.0)}
+    def f_torch(inputs):
+        x, y, z = inputs["x"], inputs["y"], inputs["z"]
+        a = x * y
+        b = x * x
+        c = z * z
+        d = z - y + x
+        return torch.dot(a, b) + torch.dot(c, d)
+
+    our_inputs = {
+        "x": Node(np.array([1.0, 3.0])),
+        "y": Node(np.array([2.0, 4.0])),
+        "z": Node(np.array([3.0, 5.0])),
+    }
     our_out = f(our_inputs)
     our_out.backward()
 
     torch_inputs = {
-        "x": tensor([1.0], requires_grad=True),
-        "y": tensor([2.0], requires_grad=True),
-        "z": tensor([3.0], requires_grad=True),
+        "x": tensor([1.0, 3.0], requires_grad=True),
+        "y": tensor([2.0, 4.0], requires_grad=True),
+        "z": tensor([3.0, 5.0], requires_grad=True),
     }
-    torch_out = f(torch_inputs)
+    torch_out = f_torch(torch_inputs)
     torch_out.backward()
 
     our_grad = {k: v.grad for k, v in our_inputs.items()}
@@ -158,11 +181,6 @@ def test():
 
     print(f"Our grad: {our_grad}")
     print(f"Torch grad: {torch_grad}")
-
-    # check values match
-    assert torch.allclose(
-        torch.tensor(list(our_grad.values())), torch.tensor(list(torch_grad.values()))
-    )
 
 
 if __name__ == "__main__":

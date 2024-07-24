@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import NamedTuple, Generator, Callable, Any
 import math
+from typing import Any, Callable, Generator, NamedTuple
+
 import numpy as np
 
 """
@@ -92,21 +93,22 @@ def cos(x: Node) -> Node:
 
 def dot(x: Node, y: Node) -> Node:
     out = Node(
-        val=np.dot(x.val, y.val), parents=(x,y), grad_fn=lambda g: (g * y.val, g * x.val),
+        val=np.dot(x.val, y.val),
+        parents=(x, y),
+        grad_fn=lambda g: (g * y.val, g * x.val),
     )
     return out
 
-    
+
 # TODO: understand this from https://github.com/mattjj/autodidact/blob/master/autograd/numpy/numpy_vjps.py
 # def _dot_grad_0(g: float, xval: float, yval: float) -> tuple:
-    
+
 
 # def _dot_grad_1(g: float, xval: float, yval: float) -> tuple:
 #     if yval.ndim == 0:
 #         return np.sum(xval * g)
 #     if xval.ndim == 1 and yval.ndim == 1:
 #         return g * xval
-
 
 
 ## --- Overload ops --- ##
@@ -131,7 +133,6 @@ def tree_map(f: Callable, tree: Any) -> Any:
 
 
 def toposort(node: Node) -> Generator:
-
     visited = set()
     nodes = []
 
@@ -147,9 +148,7 @@ def toposort(node: Node) -> Generator:
 
 
 def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
-
     def _grad(*args):
-
         in_args: tuple[Node, ...] = tree_map(Node, args)
         out: Node = f(*in_args)  # forward pass
 
@@ -160,7 +159,6 @@ def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
         toposorted: Generator = toposort(out)
 
         for node in toposorted:
-            
             # if we have an input node that does NOT have parents
             # it means its an input node
             if not node.parents:
@@ -171,6 +169,8 @@ def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
             for parent, parent_grad in zip(parents, parents_grads):
                 if id(parent) in grads:
+                    # important to reassign because updating in place can cause
+                    # silent bugs with numpy arrays.
                     grads[id(parent)] = grads[id(parent)] + parent_grad
                 else:
                     grads[id(parent)] = parent_grad
@@ -182,10 +182,9 @@ def grad(f: Callable) -> Callable[..., tuple[float, tuple[float, ...]]]:
 
 
 def test():
-
     import jax
     import jax.numpy as jnp
-    
+
     def f(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
         a = x * y
@@ -194,7 +193,6 @@ def test():
         d = y + x
         out = dot(a, b) + dot(c, d)
         return out
-    
 
     def f_jax(inputs):
         x, y, z = inputs["x"], inputs["y"], inputs["z"]
@@ -205,15 +203,16 @@ def test():
         out = jnp.dot(a, b) + jnp.dot(c, d)
         return out
 
-    inputs = {"x": np.array([1.0, 3.0]), "y": np.array([2.0, 4.0]), "z": np.array([3.0, 5.0])}
+    inputs = {
+        "x": np.array([1.0, 3.0]),
+        "y": np.array([2.0, 4.0]),
+        "z": np.array([3.0, 5.0]),
+    }
     our_grad = grad(f)(inputs)
     jax_grad = jax.grad(f_jax)(inputs)
 
-    
-
     print(f"Our grad: {our_grad}")
     print(f"Jax grads: {jax_grad}")
-
 
 
 if __name__ == "__main__":
